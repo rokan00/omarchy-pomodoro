@@ -10,6 +10,14 @@ all colors and sizes come from `qs.Commons`/`qs.Ui` design tokens (`Color.*`,
 
 ## Keys
 
+To open the popup from anywhere, add a Hyprland binding in
+`~/.config/hypr/bindings.lua` — `SUPER + CTRL + ALT` is where Omarchy keeps
+its own panel toggles (`D` calendar, `W` weather), so `P` joins them:
+
+```lua
+o.bind("SUPER + CTRL + ALT + P", "Pomodoro", "omarchy-shell shell toggle mlhunter.pomodoro")
+```
+
 With the popup focused:
 
 | Key | Action |
@@ -55,9 +63,10 @@ the first-party clock and weather panels use:
   the loaded panel. It also owns the plugin's `IpcHandler`. It uses
   `WidgetButton` rather than `BarIconButton` for the label, because that is
   what carries the `horizontalMargin` keeping the widget off its neighbours.
-  The idle glyph is `nf-md-food_apple` (U+F1425) — the roundest fruit the
-  Nerd Font carries, since the literal tomato exists only as a colour emoji
-  that would ignore the theme foreground.
+  The idle glyph is Pomicons `pom-pomodoro_done` (U+E001), an actual tomato
+  drawn for this exact purpose; the filled variant is the one that survives
+  bar-size rendering. A colour-emoji tomato would ignore the theme
+  foreground that every other bar icon follows.
 - `Panel.qml` — the popup, built on the `Panel` base (open/close lifecycle)
   plus `KeyboardPanel` (the anchored, themed window) and `PanelKeyCatcher`
   (Escape to close, `s`/`r`/`n` for start-pause/reset/skip).

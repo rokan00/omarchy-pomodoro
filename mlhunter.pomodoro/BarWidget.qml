@@ -122,11 +122,12 @@ BarWidget {
         function skip(): void { if (panelLoader.item) panelLoader.item.skip() }
     }
 
-    // nf-md-food_apple (U+F1425): the roundest fruit the bar font carries,
-    // which is as close to a tomato as JetBrainsMono Nerd Font gets. The
-    // literal tomato exists only as a colour emoji, which would ignore the
-    // theme foreground every other bar icon follows.
-    readonly property string idleGlyph: "󱐥"
+    // Pomicons pom-pomodoro_done (U+E001) — the filled tomato. The set's
+    // names describe its own fill variants, not our phase; the solid body is
+    // simply the one that still reads as a tomato at bar size, where the
+    // outline variant goes muddy. A colour-emoji tomato was the alternative,
+    // and it would ignore the theme foreground every other bar icon follows.
+    readonly property string idleGlyph: ""
 
     // A stopped timer has no number worth the width, so it collapses to the
     // tomato; the countdown earns its place only while it is moving.
