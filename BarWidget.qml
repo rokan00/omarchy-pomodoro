@@ -252,7 +252,7 @@ BarWidget {
     // simply the one that still reads as a tomato at bar size, where the
     // outline variant goes muddy. A colour-emoji tomato was the alternative,
     // and it would ignore the theme foreground every other bar icon follows.
-    readonly property string idleGlyph: ""
+    readonly property string idleGlyph: ""
 
     // A stopped timer has no number worth the width, so it collapses to the
     // tomato; the countdown earns its place only while it is moving.

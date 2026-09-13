@@ -7,6 +7,7 @@ Runs with the stdlib only: python3 scripts/test_pomodoro.py
 """
 import json
 import os
+import re
 import stat
 import tempfile
 import unittest
@@ -397,6 +398,33 @@ class ChildIdentityTests(unittest.TestCase):
         # /bin/sh exists on every system this plugin runs on; if it were ever
         # not root-owned the whole trust model would already be void.
         self.assertEqual(trusted_program(("/bin/sh",)), "/bin/sh")
+
+
+class BarGlyphTests(unittest.TestCase):
+    """The idle widget is a single private-use codepoint, so losing it fails
+    silently: the bar renders an empty string, nothing logs an error, and the
+    widget just disappears. Assert the byte is there."""
+
+    IDLE_GLYPH = "\ue001"  # Pomicons pom-pomodoro_done
+
+    def widget_source(self):
+        path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                            "BarWidget.qml")
+        with open(path, encoding="utf-8") as handle:
+            return handle.read()
+
+    def declared_glyph(self):
+        match = re.search(r'idleGlyph:\s*"([^"]*)"', self.widget_source())
+        self.assertIsNotNone(match, "no idleGlyph declaration in BarWidget.qml")
+        return match.group(1)
+
+    def test_idle_glyph_is_the_pomicons_tomato(self):
+        self.assertEqual(
+            [hex(ord(c)) for c in self.declared_glyph()],
+            [hex(ord(self.IDLE_GLYPH))],
+            "BarWidget.qml idleGlyph is not U+E001; the stopped bar widget "
+            "will render blank",
+        )
 
 
 if __name__ == "__main__":
