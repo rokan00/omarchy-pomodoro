@@ -1,6 +1,5 @@
 import QtQuick
 import Quickshell
-import Quickshell.Io
 import qs.Commons
 import qs.Ui
 
@@ -8,9 +7,11 @@ import qs.Ui
 // and the durations that drive the cycle. BarWidget.qml owns the bar label
 // and hands this panel the button to anchor against.
 //
-// Every control writes through scripts/pomodoro.py rather than holding timer
-// state here — the daemon keeps ticking with the popup closed, and the state
-// file is what both this panel and the bar label read back.
+// This panel holds no timer state and touches no files. Everything it renders
+// is read off the host widget, which is the single place the backend's
+// validated snapshots land, and every control it offers is forwarded back to
+// the host's supervised command queue. Keeping one owner for the state file
+// is what lets the backend be the only thing that ever opens it.
 Panel {
     id: root
     moduleName: "mlhunter.pomodoro"
@@ -24,75 +25,26 @@ Panel {
     property var hostWidget: null
     readonly property var barIdentity: hostWidget || root
 
-    property string phase: "idle"
-    property bool running: false
-    property int remainingSeconds: 25 * 60
-    property int cycle: 1
-    property int cyclesUntilLongBreak: 4
+    // The host widget is injected just after this component loads, so every
+    // read of it is guarded and falls back to the same defaults it starts on.
+    readonly property string phase: hostWidget ? hostWidget.phase : "idle"
+    readonly property bool running: hostWidget ? hostWidget.running : false
+    readonly property int remainingSeconds: hostWidget ? hostWidget.remainingSeconds : 25 * 60
+    readonly property int cycle: hostWidget ? hostWidget.cycle : 1
+    readonly property int cyclesUntilLongBreak: hostWidget ? hostWidget.cyclesUntilLongBreak : 4
 
-    property int workMinutes: 25
-    property int breakMinutes: 5
-    property int longBreakMinutes: 15
+    readonly property int workMinutes: hostWidget ? hostWidget.workMinutes : 25
+    readonly property int breakMinutes: hostWidget ? hostWidget.breakMinutes : 5
+    readonly property int longBreakMinutes: hostWidget ? hostWidget.longBreakMinutes : 15
 
     // Guarded so the panel renders before the bar is injected.
     readonly property color contentForeground: bar ? bar.foreground : Color.foreground
     readonly property string contentFontFamily: bar ? bar.fontFamily : Style.font.family
 
-    readonly property string scriptPath: Quickshell.env("HOME") + "/.config/omarchy/plugins/mlhunter.pomodoro/scripts/pomodoro.py"
-
     readonly property bool editingDuration: workField.field.activeFocus
         || breakField.field.activeFocus
         || longBreakField.field.activeFocus
         || cyclesField.field.activeFocus
-
-    FileView {
-        id: stateFile
-        path: Quickshell.env("HOME") + "/.local/state/omarchy/pomodoro/state.json"
-        watchChanges: true
-        printErrors: false
-        // text() is stale inside the change signal itself, so the watch routes
-        // through reload() → onLoaded to always parse fresh content.
-        onFileChanged: reload()
-        onLoaded: root.syncFromState(text())
-    }
-
-    FileView {
-        id: configFile
-        path: Quickshell.env("HOME") + "/.local/state/omarchy/pomodoro/config.json"
-        watchChanges: true
-        printErrors: false
-        onFileChanged: reload()
-        onLoaded: root.syncFromConfig(text())
-    }
-
-    function syncFromConfig(raw) {
-        try {
-            var parsed = JSON.parse(String(raw || ""))
-            if (!parsed) return
-            if (typeof parsed.work_minutes === "number") root.workMinutes = parsed.work_minutes
-            if (typeof parsed.break_minutes === "number") root.breakMinutes = parsed.break_minutes
-            if (typeof parsed.long_break_minutes === "number") root.longBreakMinutes = parsed.long_break_minutes
-            if (typeof parsed.cycles_until_long_break === "number") root.cyclesUntilLongBreak = parsed.cycles_until_long_break
-        } catch (e) {
-            // Keep defaults; config.json does not exist until the script runs once.
-        }
-    }
-
-    function syncFromState(raw) {
-        try {
-            var parsed = JSON.parse(String(raw || ""))
-            if (parsed && typeof parsed.remaining_seconds === "number") {
-                root.phase = parsed.phase || "idle"
-                root.running = !!parsed.running
-                root.remainingSeconds = parsed.remaining_seconds
-                root.cycle = parsed.cycle || 1
-                root.cyclesUntilLongBreak = parsed.cycles_until_long_break || 4
-            }
-        } catch (e) {
-            // Leave last-known-good values in place; the state file may be
-            // mid-write, though the atomic rename makes that rare.
-        }
-    }
 
     function formattedTime() {
         var total = Math.max(0, root.remainingSeconds)
@@ -110,17 +62,13 @@ Panel {
         }
     }
 
-    function runScript(args) {
-        Quickshell.execDetached([root.scriptPath].concat(args))
-    }
-
-    function start() { runScript(["start"]) }
-    function pause() { runScript(["pause"]) }
-    function reset() { runScript(["reset"]) }
-    function skip() { runScript(["skip"]) }
+    function start() { if (hostWidget) hostWidget.start() }
+    function pause() { if (hostWidget) hostWidget.pause() }
+    function reset() { if (hostWidget) hostWidget.reset() }
+    function skip() { if (hostWidget) hostWidget.skip() }
 
     function applyConfig(key, value) {
-        runScript(["config", key + "=" + value])
+        if (hostWidget) hostWidget.applyConfig(key, value)
     }
 
     function switchPanel(direction) {

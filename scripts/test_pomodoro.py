@@ -1,16 +1,34 @@
 #!/usr/bin/env python3
-"""Unit tests for the pure phase-transition logic in pomodoro.py.
+"""Unit tests for pomodoro.py: the pure phase-transition logic, the input
+validation that guards it, and the private state directory every read and
+write goes through.
 
 Runs with the stdlib only: python3 scripts/test_pomodoro.py
 """
+import json
+import os
+import stat
+import tempfile
 import unittest
 
 from pomodoro import (
+    CONFIG_NAME,
     DEFAULT_CONFIG,
+    MAX_FILE_BYTES,
+    STATE_NAME,
+    StateDir,
+    StateDirError,
     advance_phase,
+    child_environment,
+    daemon_is_running,
     fresh_work_state,
     initial_state,
+    public_snapshot,
+    sanitize_config,
+    sanitize_state,
+    state_lock,
     tick,
+    trusted_program,
     validate_config_updates,
 )
 
@@ -189,6 +207,196 @@ class ValidateConfigUpdatesTests(unittest.TestCase):
             validate_config_updates({"cycles_until_long_break": "0"})
         with self.assertRaises(ValueError):
             validate_config_updates({"cycles_until_long_break": "50"})
+
+
+class SanitizeConfigTests(unittest.TestCase):
+    def test_non_dict_falls_back_to_defaults(self):
+        self.assertEqual(sanitize_config(None), DEFAULT_CONFIG)
+        self.assertEqual(sanitize_config("25"), DEFAULT_CONFIG)
+
+    def test_out_of_range_value_falls_back_per_key(self):
+        cleaned = sanitize_config({"work_minutes": 9999, "break_minutes": 7})
+        self.assertEqual(cleaned["work_minutes"], DEFAULT_CONFIG["work_minutes"])
+        self.assertEqual(cleaned["break_minutes"], 7)
+
+    def test_unknown_keys_are_dropped(self):
+        cleaned = sanitize_config({"work_minutes": 30, "evil": "rm -rf"})
+        self.assertNotIn("evil", cleaned)
+        self.assertEqual(cleaned["work_minutes"], 30)
+
+
+class SanitizeStateTests(unittest.TestCase):
+    def valid(self, **overrides):
+        state = {
+            "phase": "work", "running": True, "remaining_seconds": 90,
+            "cycle": 2, "cycles_until_long_break": 4, "timestamp": 1.0,
+        }
+        state.update(overrides)
+        return state
+
+    def test_accepts_a_well_formed_state(self):
+        cleaned = sanitize_state(self.valid(), DEFAULT_CONFIG)
+        self.assertEqual(cleaned["phase"], "work")
+        self.assertEqual(cleaned["remaining_seconds"], 90)
+        self.assertEqual(cleaned["cycle"], 2)
+
+    def test_rejects_unknown_phase_and_non_dicts(self):
+        self.assertIsNone(sanitize_state(self.valid(phase="pwned"), DEFAULT_CONFIG))
+        self.assertIsNone(sanitize_state(["work"], DEFAULT_CONFIG))
+        self.assertIsNone(sanitize_state(None, DEFAULT_CONFIG))
+
+    def test_rejects_out_of_range_remaining_seconds(self):
+        self.assertIsNone(sanitize_state(self.valid(remaining_seconds=-1), DEFAULT_CONFIG))
+        self.assertIsNone(sanitize_state(self.valid(remaining_seconds=10 ** 9), DEFAULT_CONFIG))
+        self.assertIsNone(sanitize_state(self.valid(remaining_seconds="60"), DEFAULT_CONFIG))
+
+    def test_out_of_range_cycle_fields_fall_back_instead_of_rejecting(self):
+        cleaned = sanitize_state(
+            self.valid(cycle=0, cycles_until_long_break=999), DEFAULT_CONFIG)
+        self.assertEqual(cleaned["cycle"], 1)
+        self.assertEqual(cleaned["cycles_until_long_break"],
+                         DEFAULT_CONFIG["cycles_until_long_break"])
+
+    def test_running_is_coerced_to_a_real_bool(self):
+        cleaned = sanitize_state(self.valid(running="yes"), DEFAULT_CONFIG)
+        self.assertIs(cleaned["running"], True)
+
+
+class PublicSnapshotTests(unittest.TestCase):
+    def test_snapshot_exposes_only_the_agreed_fields(self):
+        state = fresh_work_state(DEFAULT_CONFIG, running=True)
+        state["secret"] = "should not reach the UI"
+        snapshot = public_snapshot(state, DEFAULT_CONFIG)
+        self.assertEqual(
+            sorted(snapshot["state"]),
+            ["cycle", "cycles_until_long_break", "phase", "remaining_seconds", "running"],
+        )
+        self.assertEqual(sorted(snapshot["config"]), sorted(DEFAULT_CONFIG))
+
+    def test_snapshot_is_one_stable_json_line(self):
+        state = fresh_work_state(DEFAULT_CONFIG, running=False)
+        first = json.dumps(public_snapshot(state, DEFAULT_CONFIG), sort_keys=True)
+        second = json.dumps(public_snapshot(state, DEFAULT_CONFIG), sort_keys=True)
+        self.assertEqual(first, second)  # no timestamp: idle does not churn
+        self.assertNotIn("\n", first)
+
+
+class StateDirTests(unittest.TestCase):
+    """The private directory is the whole of the filesystem defence, so the
+    refusals it is supposed to make are asserted rather than assumed."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(self._cleanup)
+        self.dir_path = os.path.join(self.tmp, "state")
+        self.store = StateDir(self.dir_path)
+        self.addCleanup(self.store.close)
+
+    def _cleanup(self):
+        import shutil
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_directory_is_created_owner_only(self):
+        mode = stat.S_IMODE(os.stat(self.dir_path).st_mode)
+        self.assertEqual(mode, 0o700)
+
+    def test_pre_existing_loose_permissions_are_tightened(self):
+        os.chmod(self.dir_path, 0o755)
+        other = StateDir(self.dir_path)
+        self.addCleanup(other.close)
+        self.assertEqual(stat.S_IMODE(os.stat(self.dir_path).st_mode), 0o700)
+
+    def test_symlinked_state_directory_is_refused(self):
+        link = os.path.join(self.tmp, "link")
+        os.symlink(self.dir_path, link)
+        with self.assertRaises(StateDirError):
+            StateDir(link)
+
+    def test_round_trips_json_through_an_atomic_replace(self):
+        self.store.write_json(STATE_NAME, {"phase": "work"})
+        self.assertEqual(self.store.read_json(STATE_NAME), {"phase": "work"})
+        # The temporary is gone, and the real file is owner-only.
+        leftovers = [n for n in os.listdir(self.dir_path) if n.endswith(".tmp")]
+        self.assertEqual(leftovers, [])
+        mode = stat.S_IMODE(os.stat(os.path.join(self.dir_path, STATE_NAME)).st_mode)
+        self.assertEqual(mode, 0o600)
+
+    def test_symlinked_state_file_is_refused_not_followed(self):
+        target = os.path.join(self.tmp, "elsewhere.json")
+        with open(target, "w") as handle:
+            json.dump({"phase": "work", "remaining_seconds": 1}, handle)
+        os.symlink(target, os.path.join(self.dir_path, STATE_NAME))
+        with self.assertRaises(OSError):
+            self.store.read_text(STATE_NAME)
+        self.assertIsNone(self.store.read_json(STATE_NAME))
+
+    def test_writing_over_a_symlink_replaces_the_link_not_its_target(self):
+        target = os.path.join(self.tmp, "elsewhere.json")
+        with open(target, "w") as handle:
+            handle.write("original")
+        os.symlink(target, os.path.join(self.dir_path, CONFIG_NAME))
+        self.store.write_json(CONFIG_NAME, {"work_minutes": 30})
+        with open(target) as handle:
+            self.assertEqual(handle.read(), "original")
+        self.assertFalse(os.path.islink(os.path.join(self.dir_path, CONFIG_NAME)))
+
+    def test_fifo_is_refused_instead_of_blocking(self):
+        os.mkfifo(os.path.join(self.dir_path, STATE_NAME))
+        with self.assertRaises(StateDirError):
+            self.store.read_text(STATE_NAME)
+        self.assertIsNone(self.store.read_json(STATE_NAME))
+
+    def test_oversized_file_is_refused(self):
+        with open(os.path.join(self.dir_path, STATE_NAME), "w") as handle:
+            handle.write("x" * (MAX_FILE_BYTES + 1))
+        with self.assertRaises(StateDirError):
+            self.store.read_text(STATE_NAME)
+
+    def test_refuses_to_write_more_than_the_bound(self):
+        with self.assertRaises(StateDirError):
+            self.store.write_json(STATE_NAME, {"blob": "x" * (MAX_FILE_BYTES + 1)})
+
+    def test_state_lock_is_exclusive_across_descriptors(self):
+        with state_lock(self.store):
+            other = StateDir(self.dir_path)
+            self.addCleanup(other.close)
+            with self.assertRaises(StateDirError):
+                with state_lock(other, timeout=0.05):
+                    pass
+
+    def test_daemon_lock_reports_liveness_without_trusting_a_pid(self):
+        self.assertFalse(daemon_is_running(self.store))
+        fd = self.store.open_lock("daemon.lock")
+        try:
+            import fcntl
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            self.assertTrue(daemon_is_running(self.store))
+        finally:
+            os.close(fd)
+        self.assertFalse(daemon_is_running(self.store))
+
+
+class ChildIdentityTests(unittest.TestCase):
+    def test_child_environment_is_closed_to_inherited_variables(self):
+        os.environ["POMODORO_TEST_LEAK"] = "leaked"
+        self.addCleanup(os.environ.pop, "POMODORO_TEST_LEAK", None)
+        env = child_environment()
+        self.assertNotIn("POMODORO_TEST_LEAK", env)
+        self.assertEqual(env["PATH"], "/usr/bin:/bin")
+        self.assertIn("HOME", env)
+
+    def test_trusted_program_rejects_a_user_owned_impostor(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            impostor = os.path.join(tmp, "notify-send")
+            with open(impostor, "w") as handle:
+                handle.write("#!/bin/sh\nexit 0\n")
+            os.chmod(impostor, 0o755)
+            self.assertIsNone(trusted_program((impostor,)))
+
+    def test_trusted_program_accepts_a_real_root_owned_binary(self):
+        # /bin/sh exists on every system this plugin runs on; if it were ever
+        # not root-owned the whole trust model would already be void.
+        self.assertEqual(trusted_program(("/bin/sh",)), "/bin/sh")
 
 
 if __name__ == "__main__":
