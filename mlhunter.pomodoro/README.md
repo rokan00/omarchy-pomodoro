@@ -1,11 +1,26 @@
 # mlhunter.pomodoro
 
-A Pomodoro focus timer for Omarchy's Quickshell-based bar. It shows a live
-`mm:ss` countdown in the bar; clicking it opens a popup with the countdown,
-phase and cycle (Focus / Break / Long break), Start/Pause, Reset, Skip, and
-the work/break/long-break durations plus how many work cycles happen before
-a long break. Fully theme-compatible: all colors and sizes come from
-`qs.Commons`/`qs.Ui` design tokens (`Color.*`, `Style.*`), never hardcoded.
+A Pomodoro focus timer for Omarchy's Quickshell-based bar. A stopped timer
+sits in the bar as a tomato; a running one counts down in `mm:ss`. Clicking
+it opens a popup with the countdown, phase and cycle (Focus / Break / Long
+break), Start/Pause, Reset, Skip, and the work/break/long-break durations
+plus how many work cycles happen before a long break. Fully theme-compatible:
+all colors and sizes come from `qs.Commons`/`qs.Ui` design tokens (`Color.*`,
+`Style.*`), never hardcoded.
+
+## Keys
+
+With the popup focused:
+
+| Key | Action |
+|---|---|
+| `Space` | Start, or pause a running timer |
+| `R` | Reset to a fresh work phase |
+| `S` | Skip the current phase |
+| `Esc` | Close the popup |
+
+The duration fields are editable, so the popup stops reading these as
+shortcuts while one of them has focus.
 
 ## Install
 
@@ -37,7 +52,12 @@ the first-party clock and weather panels use:
 - `BarWidget.qml` — the bar label, and the panel host. The bar routes
   `summon`/`hide`/`toggle` through `Bar.findPanelWidget`, which requires
   `open()`, `close()` and `opened` on the bar-widget root; those forward to
-  the loaded panel. It also owns the plugin's `IpcHandler`.
+  the loaded panel. It also owns the plugin's `IpcHandler`. It uses
+  `WidgetButton` rather than `BarIconButton` for the label, because that is
+  what carries the `horizontalMargin` keeping the widget off its neighbours.
+  The idle glyph is `nf-md-food_apple` (U+F1425) — the roundest fruit the
+  Nerd Font carries, since the literal tomato exists only as a colour emoji
+  that would ignore the theme foreground.
 - `Panel.qml` — the popup, built on the `Panel` base (open/close lifecycle)
   plus `KeyboardPanel` (the anchored, themed window) and `PanelKeyCatcher`
   (Escape to close, `s`/`r`/`n` for start-pause/reset/skip).
@@ -129,7 +149,8 @@ python3 scripts/test_pomodoro.py -v
 
 ## Verification
 
-Checked on a live Omarchy shell: the bar label counts down, the popup opens
-anchored under it and picks up the theme, and start / pause / reset / skip
-each round-trip through the state file with the daemon starting and exiting
-as expected.
+Checked on a live Omarchy shell: the bar shows the tomato when stopped and
+counts down when running, the popup opens anchored under it and picks up the
+theme, start / pause / reset / skip each round-trip through the state file
+with the daemon starting and exiting as expected, and `Space` / `R` / `S`
+drive the same transitions from the keyboard.

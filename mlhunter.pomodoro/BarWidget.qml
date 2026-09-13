@@ -122,17 +122,25 @@ BarWidget {
         function skip(): void { if (panelLoader.item) panelLoader.item.skip() }
     }
 
-    BarIconButton {
+    // nf-md-food_apple (U+F1425): the roundest fruit the bar font carries,
+    // which is as close to a tomato as JetBrainsMono Nerd Font gets. The
+    // literal tomato exists only as a colour emoji, which would ignore the
+    // theme foreground every other bar icon follows.
+    readonly property string idleGlyph: "󱐥"
+
+    // A stopped timer has no number worth the width, so it collapses to the
+    // tomato; the countdown earns its place only while it is moving.
+    WidgetButton {
         id: button
         anchors.fill: parent
         bar: root.bar
-        text: root.formattedTime()
-        slotSize: Style.bar.statusSlot
-        fontSize: Style.font.caption
-        foreground: root.bar ? root.bar.barForeground : Color.foreground
+        text: root.running ? root.formattedTime() : root.idleGlyph
+        fontSize: root.running ? Style.font.caption : Style.font.icon
         tooltipText: root.running
             ? (root.phaseLabel() + ": " + root.formattedTime() + " remaining")
-            : "Pomodoro: click to open"
+            : (root.phase === "idle"
+                ? "Pomodoro: click to start"
+                : root.phaseLabel() + " paused at " + root.formattedTime())
         onPressed: function(b) {
             root.togglePanel()
         }

@@ -40,6 +40,11 @@ Panel {
 
     readonly property string scriptPath: Quickshell.env("HOME") + "/.config/omarchy/plugins/mlhunter.pomodoro/scripts/pomodoro.py"
 
+    readonly property bool editingDuration: workField.field.activeFocus
+        || breakField.field.activeFocus
+        || longBreakField.field.activeFocus
+        || cyclesField.field.activeFocus
+
     FileView {
         id: stateFile
         path: Quickshell.env("HOME") + "/.local/state/omarchy/pomodoro/state.json"
@@ -137,13 +142,15 @@ Panel {
         PanelKeyCatcher {
             id: keyCatcher
             anchors.fill: parent
+            // The duration fields are editable, so typing a digit into one
+            // must not read as a transport shortcut.
+            blocked: root.editingDuration
             onCloseRequested: root.close()
             onActivateRequested: root.running ? root.pause() : root.start()
             onTabRequested: function(direction) { root.switchPanel(direction) }
             onTextKey: function(t) {
-                if (t === "s" || t === "S") root.running ? root.pause() : root.start()
-                else if (t === "r" || t === "R") root.reset()
-                else if (t === "n" || t === "N") root.skip()
+                if (t === "r" || t === "R") root.reset()
+                else if (t === "s" || t === "S") root.skip()
             }
 
             Column {
@@ -224,6 +231,16 @@ Panel {
                     }
                 }
 
+                Text {
+                    textFormat: Text.PlainText
+                    width: parent.width
+                    horizontalAlignment: Text.AlignHCenter
+                    text: "Space " + (root.running ? "pause" : "start") + " · R reset · S skip"
+                    color: Qt.darker(root.contentForeground, 1.9)
+                    font.family: root.contentFontFamily
+                    font.pixelSize: Style.font.caption
+                }
+
                 PanelSeparator {
                     width: parent.width
                     foreground: root.contentForeground
@@ -244,6 +261,7 @@ Panel {
                     rowSpacing: Style.spacing.rowGap
 
                     NumberField {
+                        id: workField
                         label: "Work (min)"
                         value: root.workMinutes
                         from: 1
@@ -255,6 +273,7 @@ Panel {
                     }
 
                     NumberField {
+                        id: breakField
                         label: "Break (min)"
                         value: root.breakMinutes
                         from: 1
@@ -266,6 +285,7 @@ Panel {
                     }
 
                     NumberField {
+                        id: longBreakField
                         label: "Long break (min)"
                         value: root.longBreakMinutes
                         from: 1
@@ -277,6 +297,7 @@ Panel {
                     }
 
                     NumberField {
+                        id: cyclesField
                         label: "Cycles till long"
                         value: root.cyclesUntilLongBreak
                         from: 1
