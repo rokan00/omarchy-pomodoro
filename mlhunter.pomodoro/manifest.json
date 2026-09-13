@@ -4,6 +4,7 @@
   "name": "Pomodoro",
   "version": "1.0.0",
   "author": "mlhunter",
+  "license": "MIT",
   "description": "A bar-resident Pomodoro focus timer with configurable work/break/long-break durations and cycle counts. Runs a background countdown daemon and stays theme-compatible via Omarchy shell tokens.",
   "kinds": ["bar-widget"],
   "entryPoints": {

@@ -7,3 +7,7 @@ placed in the center of the bar and fully theme-compatible via Omarchy's
 See `mlhunter.pomodoro/` for the plugin (manifest, QML bar widget and
 popup panel, Python daemon backend, and unit tests) and its own README for
 install steps and implementation notes.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
