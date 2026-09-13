@@ -5,11 +5,9 @@
   "version": "1.0.0",
   "author": "mlhunter",
   "description": "A bar-resident Pomodoro focus timer with configurable work/break/long-break durations and cycle counts. Runs a background countdown daemon and stays theme-compatible via Omarchy shell tokens.",
-  "kinds": ["bar-widget", "overlay"],
-  "keepLoaded": true,
+  "kinds": ["bar-widget"],
   "entryPoints": {
-    "barWidget": "BarWidget.qml",
-    "overlay": "Overlay.qml"
+    "barWidget": "BarWidget.qml"
   },
   "barWidget": {
     "displayName": "Pomodoro",
@@ -17,11 +15,5 @@
     "category": "Productivity",
     "allowMultiple": false,
     "icon": ""
-  },
-  "overlay": {
-    "displayName": "Pomodoro",
-    "description": "Pomodoro timer controls and settings",
-    "category": "Productivity",
-    "allowMultiple": false
   }
 }

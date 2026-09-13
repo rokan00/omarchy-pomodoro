@@ -4,9 +4,8 @@ import Quickshell.Io
 import qs.Commons
 import qs.Ui
 
-// Bar widget for the Pomodoro plugin.
-// Shows a compact mm:ss countdown and phase indicator in the bar; clicking
-// it toggles the overlay panel where the timer is actually controlled.
+// Bar label for the Pomodoro plugin, and the host for the timer popup.
+// Clicking toggles the popup; Panel.qml owns the controls and settings.
 BarWidget {
     id: root
     moduleName: "mlhunter.pomodoro"
@@ -20,8 +19,10 @@ BarWidget {
         path: Quickshell.env("HOME") + "/.local/state/omarchy/pomodoro/state.json"
         watchChanges: true
         printErrors: false
+        // text() is stale inside the change signal itself, so the watch routes
+        // through reload() → onLoaded to always parse fresh content.
+        onFileChanged: reload()
         onLoaded: root.parseState(text())
-        onFileChanged: root.parseState(text())
     }
 
     function parseState(raw) {
@@ -57,10 +58,69 @@ BarWidget {
         }
     }
 
+    // Shape contract for shell.summon/hide/toggle routing: Bar.findPanelWidget
+    // requires open/close/opened on the bar-widget root.
+    readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false
+
+    function open() {
+        if (panelLoader.item) panelLoader.item.open()
+    }
+
+    function close() {
+        if (panelLoader.item) panelLoader.item.close()
+    }
+
+    function togglePanel() {
+        if (panelLoader.item) panelLoader.item.toggle()
+    }
+
+    // Forwarded so this widget can stand in for the panel as the bar's popout
+    // identity, the same way the first-party panel widgets do.
+    readonly property bool popoutSwitchClosing: panelLoader.item ? panelLoader.item.popoutSwitchClosing === true : false
+
+    function closeForPopoutSwitch() {
+        if (panelLoader.item) panelLoader.item.closeForPopoutSwitch()
+    }
+
+    function injectPanel() {
+        var target = panelLoader.item
+        if (!target) return
+        if ("bar" in target) target.bar = root.bar
+        if ("settings" in target) target.settings = root.settings
+        if ("anchorItem" in target) target.anchorItem = button
+        if ("hostWidget" in target) target.hostWidget = root
+    }
+
     implicitWidth: button.implicitWidth
     implicitHeight: button.implicitHeight
 
-    visible: true
+    onBarChanged: injectPanel()
+    onSettingsChanged: injectPanel()
+
+    Loader {
+        id: panelLoader
+        active: true
+        source: Qt.resolvedUrl("Panel.qml")
+        visible: false
+        onLoaded: {
+            root.injectPanel()
+            Qt.callLater(root.injectPanel)
+        }
+    }
+
+    IpcHandler {
+        target: "mlhunter.pomodoro"
+
+        function open(): void { root.open() }
+        function close(): void { root.close() }
+        function show(): void { root.open() }
+        function hide(): void { root.close() }
+        function toggle(): void { root.togglePanel() }
+        function start(): void { if (panelLoader.item) panelLoader.item.start() }
+        function pause(): void { if (panelLoader.item) panelLoader.item.pause() }
+        function reset(): void { if (panelLoader.item) panelLoader.item.reset() }
+        function skip(): void { if (panelLoader.item) panelLoader.item.skip() }
+    }
 
     BarIconButton {
         id: button
@@ -74,8 +134,7 @@ BarWidget {
             ? (root.phaseLabel() + ": " + root.formattedTime() + " remaining")
             : "Pomodoro: click to open"
         onPressed: function(b) {
-            if (!root.bar) return
-            root.bar.run("omarchy-shell shell toggle mlhunter.pomodoro '{}'")
+            root.togglePanel()
         }
     }
 }

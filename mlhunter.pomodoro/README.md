@@ -1,12 +1,11 @@
 # mlhunter.pomodoro
 
 A Pomodoro focus timer for Omarchy's Quickshell-based bar. It shows a live
-`mm:ss` countdown and phase indicator (Focus / Break / Long break) in the
-bar; clicking it opens an overlay with Start/Pause, Reset, Skip, and a
-settings section for work/break/long-break durations and how many work
-cycles happen before a long break. Fully theme-compatible: all colors and
-sizes come from `qs.Commons`/`qs.Ui` design tokens (`Color.*`, `Style.*`),
-never hardcoded.
+`mm:ss` countdown in the bar; clicking it opens a popup with the countdown,
+phase and cycle (Focus / Break / Long break), Start/Pause, Reset, Skip, and
+the work/break/long-break durations plus how many work cycles happen before
+a long break. Fully theme-compatible: all colors and sizes come from
+`qs.Commons`/`qs.Ui` design tokens (`Color.*`, `Style.*`), never hardcoded.
 
 ## Install
 
@@ -16,14 +15,43 @@ never hardcoded.
    ```
 2. Register the plugin in `~/.config/omarchy/shell.json`:
    - Add `{"id": "mlhunter.pomodoro"}` to the top-level `plugins` array.
-   - Add `"mlhunter.pomodoro"` to `bar.layout.center` so it renders in the
-     middle of the bar.
-3. Restart `omarchy-shell` (or reload its config, per your Omarchy setup)
-   so it picks up the new plugin and shell.json changes.
+   - Add `{"id": "mlhunter.pomodoro"}` to `bar.layout.center` so it renders
+     in the middle of the bar.
+3. Run `omarchy restart shell` so it picks up the new plugin. (Editing the
+   plugin's QML afterwards hot-reloads; a changed `manifest.json` needs the
+   restart.)
 4. Optional: install `notify-send` (`libnotify`) and `paplay` (`pulseaudio-utils`
    / `pipewire-pulse`) if not already present, so phase-completion alerts
    show up as desktop notifications with a sound. Both are best-effort —
    the script never fails or crashes if either is missing.
+
+`scripts/pomodoro.py` must stay executable: the panel runs it by path, and
+`Quickshell.execDetached` does no `PATH` lookup, so a bare `python3` in the
+command would not resolve.
+
+## Structure
+
+The plugin is a `bar-widget` whose widget hosts the popup, the same shape
+the first-party clock and weather panels use:
+
+- `BarWidget.qml` — the bar label, and the panel host. The bar routes
+  `summon`/`hide`/`toggle` through `Bar.findPanelWidget`, which requires
+  `open()`, `close()` and `opened` on the bar-widget root; those forward to
+  the loaded panel. It also owns the plugin's `IpcHandler`.
+- `Panel.qml` — the popup, built on the `Panel` base (open/close lifecycle)
+  plus `KeyboardPanel` (the anchored, themed window) and `PanelKeyCatcher`
+  (Escape to close, `s`/`r`/`n` for start-pause/reset/skip).
+
+Both watch the state file with `FileView`. The watch routes through
+`onFileChanged: reload()` → `onLoaded`, because `text()` is stale inside the
+change signal itself — reading it there leaves the countdown frozen.
+
+## IPC
+
+```
+omarchy-shell mlhunter.pomodoro toggle   # also: open, close, show, hide
+omarchy-shell mlhunter.pomodoro start    # also: pause, reset, skip
+```
 
 ## State, config, and the daemon
 
@@ -99,13 +127,9 @@ functions with no I/O, so it's fully unit-tested in
 python3 scripts/test_pomodoro.py -v
 ```
 
-## Honesty note
+## Verification
 
-This plugin was built in a sandbox with no access to a live Quickshell /
-Omarchy runtime — the Python backend and its state machine are unit
-tested and confirmed working, and the QML has been checked for balanced
-braces/imports and for using only `Color.*`/`Style.*` tokens (no hardcoded
-colors), but **the QML has not been visually verified in an actual bar or
-overlay**. If anything renders oddly, sizes wrong, or an API name doesn't
-match your installed Omarchy version's `qs.Ui`/`qs.Commons` components,
-please report it so it can be fixed.
+Checked on a live Omarchy shell: the bar label counts down, the popup opens
+anchored under it and picks up the theme, and start / pause / reset / skip
+each round-trip through the state file with the daemon starting and exiting
+as expected.
