@@ -8,7 +8,7 @@ work/break/long-break durations plus how many work cycles happen before a
 long break. Fully theme-compatible: all colors and sizes come from
 `qs.Commons`/`qs.Ui` design tokens (`Color.*`, `Style.*`), never hardcoded.
 
-![The popup open over the Omarchy bar](assets/screenshot-desktop.jpg)
+![The popup open over the Omarchy bar](preview.png)
 
 ## Install
 
