@@ -37,6 +37,12 @@ Panel {
     readonly property int breakMinutes: hostWidget ? hostWidget.breakMinutes : 5
     readonly property int longBreakMinutes: hostWidget ? hostWidget.longBreakMinutes : 15
 
+    // The host widget already derives this from phase/remaining/durations;
+    // reread it here rather than keeping a second copy of that arithmetic.
+    readonly property real progressFraction: hostWidget ? hostWidget.progressFraction() : 0
+    readonly property real ringDiameter: Style.space(148)
+    readonly property real ringStrokeWidth: Style.space(6)
+
     // Guarded so the panel renders before the bar is injected.
     readonly property color contentForeground: bar ? bar.foreground : Color.foreground
     readonly property string contentFontFamily: bar ? bar.fontFamily : Style.font.family
@@ -107,36 +113,54 @@ Panel {
                 anchors.right: parent.right
                 spacing: Style.spacing.panelGap
 
-                // ---- Hero: the countdown, with the phase and cycle under it.
+                // ---- Hero: the countdown ringed by phase progress, with
+                //      the phase and cycle underneath.
                 Item {
                     width: parent.width
-                    height: hero.implicitHeight
+                    height: ringWrap.height
 
-                    Column {
-                        id: hero
+                    Item {
+                        id: ringWrap
                         anchors.horizontalCenter: parent.horizontalCenter
-                        spacing: Style.spacing.xs
+                        width: root.ringDiameter
+                        height: root.ringDiameter
 
-                        Text {
-                            textFormat: Text.PlainText
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            text: root.formattedTime()
-                            color: root.running
-                                ? Style.selectedStateColor(root.contentForeground, Color.accent)
-                                : root.contentForeground
-                            font.family: root.contentFontFamily
-                            font.pixelSize: 52
-                            font.bold: true
+                        ProgressRing {
+                            anchors.fill: parent
+                            diameter: root.ringDiameter
+                            strokeWidth: root.ringStrokeWidth
+                            fraction: root.progressFraction
+                            trackColor: Qt.rgba(root.contentForeground.r, root.contentForeground.g,
+                                                 root.contentForeground.b, 0.15)
+                            progressColor: Color.accent
                         }
 
-                        Text {
-                            textFormat: Text.PlainText
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            text: root.phaseLabel().toUpperCase() + " · " + root.cycle + "/" + root.cyclesUntilLongBreak
-                            color: Qt.darker(root.contentForeground, 1.5)
-                            font.family: root.contentFontFamily
-                            font.pixelSize: Style.font.bodySmall
-                            font.letterSpacing: 1
+                        Column {
+                            id: hero
+                            anchors.centerIn: parent
+                            spacing: Style.spacing.xs
+
+                            Text {
+                                textFormat: Text.PlainText
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                text: root.formattedTime()
+                                color: root.running
+                                    ? Style.selectedStateColor(root.contentForeground, Color.accent)
+                                    : root.contentForeground
+                                font.family: root.contentFontFamily
+                                font.pixelSize: 36
+                                font.bold: true
+                            }
+
+                            Text {
+                                textFormat: Text.PlainText
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                text: root.phaseLabel().toUpperCase() + " · " + root.cycle + "/" + root.cyclesUntilLongBreak
+                                color: Qt.darker(root.contentForeground, 1.5)
+                                font.family: root.contentFontFamily
+                                font.pixelSize: Style.font.bodySmall
+                                font.letterSpacing: 1
+                            }
                         }
                     }
                 }

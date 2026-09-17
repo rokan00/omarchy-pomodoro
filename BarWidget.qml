@@ -174,6 +174,25 @@ BarWidget {
         return (minutes < 10 ? "0" : "") + minutes + ":" + (seconds < 10 ? "0" : "") + seconds
     }
 
+    // Total length of whatever phase is current, in seconds — "idle" reads
+    // as a not-yet-started work phase, so the ring has something sane to
+    // show before the first "start".
+    function phaseTotalSeconds() {
+        switch (root.phase) {
+        case "break": return root.breakMinutes * 60
+        case "long_break": return root.longBreakMinutes * 60
+        default: return root.workMinutes * 60
+        }
+    }
+
+    // 0 at the top of a phase, 1 right as it completes.
+    function progressFraction() {
+        var total = root.phaseTotalSeconds()
+        if (total <= 0) return 0
+        var elapsed = total - root.remainingSeconds
+        return Math.max(0, Math.min(1, elapsed / total))
+    }
+
     function phaseLabel() {
         switch (root.phase) {
         case "work": return "Focus"
@@ -216,7 +235,16 @@ BarWidget {
         if ("hostWidget" in target) target.hostWidget = root
     }
 
-    implicitWidth: button.implicitWidth
+    // Same rule the digits already follow: a stopped timer has nothing
+    // worth animating, so the ring appears and disappears together with
+    // the countdown rather than sitting there frozen at some old fraction.
+    readonly property bool ringVisible: root.running
+    readonly property real ringDiameter: Style.bar.iconCanvas
+    readonly property real ringStrokeWidth: Style.space(2)
+    readonly property real ringSpacing: Style.space(4)
+    readonly property color barForegroundColor: root.bar ? root.bar.barForeground : Color.foreground
+
+    implicitWidth: (root.ringVisible ? root.ringDiameter + root.ringSpacing : 0) + button.implicitWidth
     implicitHeight: button.implicitHeight
 
     onBarChanged: injectPanel()
@@ -254,21 +282,37 @@ BarWidget {
     // and it would ignore the theme foreground every other bar icon follows.
     readonly property string idleGlyph: ""
 
-    // A stopped timer has no number worth the width, so it collapses to the
-    // tomato; the countdown earns its place only while it is moving.
-    WidgetButton {
-        id: button
-        anchors.fill: parent
-        bar: root.bar
-        text: root.running ? root.formattedTime() : root.idleGlyph
-        fontSize: root.running ? Style.font.caption : Style.font.icon
-        tooltipText: root.running
-            ? (root.phaseLabel() + ": " + root.formattedTime() + " remaining")
-            : (root.phase === "idle"
-                ? "Pomodoro: click to start"
-                : root.phaseLabel() + " paused at " + root.formattedTime())
-        onPressed: function(b) {
-            root.togglePanel()
+    Row {
+        anchors.centerIn: parent
+        spacing: root.ringVisible ? root.ringSpacing : 0
+
+        ProgressRing {
+            anchors.verticalCenter: parent.verticalCenter
+            visible: root.ringVisible
+            diameter: root.ringDiameter
+            strokeWidth: root.ringStrokeWidth
+            fraction: root.progressFraction()
+            trackColor: Qt.rgba(root.barForegroundColor.r, root.barForegroundColor.g,
+                                 root.barForegroundColor.b, 0.18)
+            progressColor: Color.accent
+        }
+
+        // A stopped timer has no number worth the width, so it collapses to
+        // the tomato; the countdown (and the ring beside it) earns its place
+        // only while it is moving.
+        WidgetButton {
+            id: button
+            bar: root.bar
+            text: root.running ? root.formattedTime() : root.idleGlyph
+            fontSize: root.running ? Style.font.caption : Style.font.icon
+            tooltipText: root.running
+                ? (root.phaseLabel() + ": " + root.formattedTime() + " remaining")
+                : (root.phase === "idle"
+                    ? "Pomodoro: click to start"
+                    : root.phaseLabel() + " paused at " + root.formattedTime())
+            onPressed: function(b) {
+                root.togglePanel()
+            }
         }
     }
 }

@@ -2,10 +2,11 @@
 
 A Pomodoro focus timer for Omarchy's Quickshell-based bar (`omarchy-shell`).
 A stopped timer sits in the bar as a tomato; a running one counts down in
-`mm:ss`. Clicking it opens a popup with the countdown, phase and cycle
-(Focus / Break / Long break), Start/Pause, Reset, Skip, and the
-work/break/long-break durations plus how many work cycles happen before a
-long break. Fully theme-compatible: all colors and sizes come from
+`mm:ss` beside a small progress ring that sweeps as the phase elapses.
+Clicking it opens a popup with the same countdown behind a larger ring, the
+phase and cycle (Focus / Break / Long break), Start/Pause, Reset, Skip, and
+the work/break/long-break durations plus how many work cycles happen before
+a long break. Fully theme-compatible: all colors and sizes come from
 `qs.Commons`/`qs.Ui` design tokens (`Color.*`, `Style.*`), never hardcoded.
 
 ![The popup open over the Omarchy bar](preview.png)
@@ -88,6 +89,15 @@ the first-party clock and weather panels use:
 - `Panel.qml` — the popup, built on the `Panel` base (open/close lifecycle)
   plus `KeyboardPanel` (the anchored, themed window) and `PanelKeyCatcher`
   (Escape to close, `Space`/`R`/`S` for start-pause/reset/skip).
+- `ProgressRing.qml` — a plain `QtQuick.Shapes`/`PathAngleArc` ring (the
+  same primitive the first-party speed-test gauge uses), shared by both:
+  a dim full-circle track plus an accent arc that sweeps clockwise from 12
+  o'clock as the current phase elapses. Both hosts derive the fraction from
+  `BarWidget.qml`'s `progressFraction()` — elapsed over whichever of
+  work/break/long-break minutes the current phase uses — so there is one
+  place computing it, not two. The bar's ring only appears while running,
+  matching the tomato/digits swap; the popup's ring is always visible,
+  matching its countdown text.
 
 `BarWidget.qml` owns the only channel to the timer's data, and `Panel.qml`
 reads everything off it — the panel holds no timer state and opens no files.
@@ -255,6 +265,13 @@ behind; a symlink planted at `state.json` is refused on read and replaced
 (not followed) on write, leaving its target untouched; a FIFO planted at
 `config.json` returns promptly instead of stalling; and a pre-existing
 world-readable state directory is tightened to `0700` on the next run.
+
+The progress ring was checked the same way: with `work_minutes` set to 1 for
+a fast cycle, the bar ring appears the moment `start` fires (not before),
+visibly sweeps clockwise from empty, and disappears back to the plain tomato
+on `pause`; the popup ring sweeps the same fraction behind the countdown and
+is visible even before the first `start`. Both track the accent color the
+rest of the running-state UI already uses, in both light and dark themes.
 
 ## License
 

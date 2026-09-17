@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "mlhunter.pomodoro",
   "name": "Pomodoro",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "author": "mlhunter",
   "license": "MIT",
   "description": "A bar-resident Pomodoro focus timer with configurable work/break/long-break durations and cycle counts. Runs a background countdown daemon and stays theme-compatible via Omarchy shell tokens.",
