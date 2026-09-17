@@ -18,14 +18,27 @@ omarchy plugin add https://github.com/rokan00/omarchy-pomodoro.git --enable
 ```
 
 This clones straight into `~/.config/omarchy/plugins/mlhunter.pomodoro`
-(the id `manifest.json` declares), validates it, and enables it. Update
-later with `omarchy plugin update mlhunter.pomodoro`; remove it with
-`omarchy plugin remove mlhunter.pomodoro` (backs up before deleting).
+(the id `manifest.json` declares), validates it, and enables it. Remove it
+with `omarchy plugin remove mlhunter.pomodoro` (backs up before deleting).
 
 Optional: install `notify-send` (`libnotify`) and `paplay`
 (`pulseaudio-utils` / `pipewire-pulse`) if not already present, so
 phase-completion alerts show up as desktop notifications with a sound. Both
 are best-effort — the script never fails or crashes if either is missing.
+
+## Update
+
+```
+omarchy plugin update mlhunter.pomodoro
+```
+
+This is the built-in Omarchy update path — nothing plugin-specific to run.
+It fetches `origin HEAD`, shows the diff before applying anything (skip the
+prompt with `--yes`), fast-forwards only (refuses instead of clobbering if
+you have local edits in the installed copy), and re-validates the result
+against the plugin manifest schema — rolling back automatically if that
+validation fails. Omit the id (`omarchy plugin update`) to update every
+git-managed plugin at once.
 
 ### Developing against a local checkout
 
