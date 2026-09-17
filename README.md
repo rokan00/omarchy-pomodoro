@@ -9,6 +9,8 @@ the work/break/long-break durations plus how many work cycles happen before
 a long break. Fully theme-compatible: all colors and sizes come from
 `qs.Commons`/`qs.Ui` design tokens (`Color.*`, `Style.*`), never hardcoded.
 
+![The bar widget mid-focus, ring partway around the digits](assets/screenshot-bar.png)
+
 ![The popup open over the Omarchy bar](preview.png)
 
 ## Install
@@ -79,7 +81,7 @@ With the popup focused:
 | `S` | Skip the current phase |
 | `Esc` | Close the popup |
 
-<img src="assets/screenshot-panel.png" alt="The Pomodoro popup, close up" width="322">
+<img src="assets/screenshot-panel.png" alt="The Pomodoro popup, close up" width="317">
 
 The duration fields are editable, so the popup stops reading these as
 shortcuts while one of them has focus.
